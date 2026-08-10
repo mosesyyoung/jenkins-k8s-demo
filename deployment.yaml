@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: jenkins-k8s-demo
+  namespace: production
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: jenkins-k8s-demo
+
+  template:
+    metadata:
+      labels:
+        app: jenkins-k8s-demo
+
+    spec:
+      containers:
+        - name: nginx
+
+          image: jenkins-k8s-demo:latest
+          imagePullPolicy: Never
+
+          ports:
+            - containerPort: 80
