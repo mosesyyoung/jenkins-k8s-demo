@@ -1,0 +1,58 @@
+name: Deploy Kubernetes App
+
+on:
+  push:
+    branches:
+      - master
+
+
+jobs:
+
+  deploy:
+
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+
+      - name: Build Docker Image
+        run: |
+          docker build \
+            -t jenkins-k8s-demo:build-${GITHUB_RUN_NUMBER} \
+            -t jenkins-k8s-demo:latest \
+            .
+
+
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply \
+            -f deployment.yaml \
+            -n production
+
+          kubectl apply \
+            -f service.yaml \
+            -n production
+
+          kubectl rollout restart \
+            deployment/jenkins-k8s-demo \
+            -n production
+
+          kubectl rollout status \
+            deployment/jenkins-k8s-demo \
+            -n production \
+            --timeout=120s
+
+
+      - name: Cleanup workspace
+        if: always()
+        run: |
+          git clean -ffdx
