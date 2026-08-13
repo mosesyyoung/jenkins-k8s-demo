@@ -18,11 +18,14 @@ spec:
         app: jenkins-k8s-demo
 
     spec:
+      imagePullSecrets:
+        - name: harbor-registry
+
       containers:
         - name: nginx
-
-          image: jenkins-k8s-demo:latest
-          imagePullPolicy: Never
+          image: 192.168.56.101:8088/k8s-lab/jenkins-k8s-demo:ci-placeholder
+          imagePullPolicy: Always
 
           ports:
             - containerPort: 80
+
