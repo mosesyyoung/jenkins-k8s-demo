@@ -1,10 +1,15 @@
-name: Deploy Kubernetes App
+name: Deploy Kubernetes App via Harbor
 
 on:
   push:
     branches:
       - master
 
+env:
+  HARBOR_REGISTRY: 192.168.56.101:8088
+  HARBOR_PROJECT: k8s-lab
+  IMAGE_NAME: jenkins-k8s-demo
+  K8S_NAMESPACE: production
 
 jobs:
 
@@ -15,7 +20,6 @@ jobs:
       - Linux
       - X64
 
-
     steps:
 
       - name: Checkout
@@ -23,36 +27,67 @@ jobs:
         with:
           clean: true
 
+      - name: Prepare image tag
+        shell: bash
+        run: |
+          IMAGE_TAG="${GITHUB_SHA::12}"
 
-      - name: Build Docker Image
+          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
+
+          echo \
+            "FULL_IMAGE=${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG}" \
+            >> "$GITHUB_ENV"
+
+      - name: Build Docker image
         run: |
           docker build \
-            -t jenkins-k8s-demo:build-${GITHUB_RUN_NUMBER} \
-            -t jenkins-k8s-demo:latest \
+            -t "$FULL_IMAGE" \
             .
 
+      - name: Login Harbor
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.HARBOR_REGISTRY }}
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+
+      - name: Push Docker image
+        run: |
+          docker push "$FULL_IMAGE"
 
       - name: Deploy to Kubernetes
         run: |
-          kubectl apply \
+          kubectl set image \
             -f deployment.yaml \
-            -n production
+            nginx="$FULL_IMAGE" \
+            --local \
+            -o yaml \
+          | kubectl apply -f -
 
           kubectl apply \
-            -f service.yaml \
-            -n production
+            -f service.yaml
 
-          kubectl rollout restart \
-            deployment/jenkins-k8s-demo \
-            -n production
-
+      - name: Verify deployment
+        run: |
           kubectl rollout status \
             deployment/jenkins-k8s-demo \
-            -n production \
+            -n "$K8S_NAMESPACE" \
             --timeout=120s
 
+          kubectl get pods \
+            -n "$K8S_NAMESPACE"
 
-      - name: Cleanup workspace
+          echo "Running image:"
+
+          kubectl get deployment \
+            jenkins-k8s-demo \
+            -n "$K8S_NAMESPACE" \
+            -o jsonpath='{.spec.template.spec.containers[0].image}'
+
+          echo
+
+      - name: Logout Harbor
         if: always()
         run: |
-          git clean -ffdx
+          docker logout "$HARBOR_REGISTRY" || true
+
